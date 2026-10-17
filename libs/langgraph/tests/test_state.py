@@ -2,7 +2,7 @@ import inspect
 import operator
 import warnings
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Union
+from typing import Annotated, Any, Literal, Union
 from typing import Annotated as Annotated2
 
 import pytest
@@ -341,6 +341,37 @@ def test_private_input_schema_conditional_edge():
     builder.add_edge("__start__", "node_1")
     graph = builder.compile()
     assert graph.invoke({"foo": 0}) == {"foo": 2, "bar": "meow"}
+
+
+def test_conditional_edge_literal_hint_on_callable_class():
+    class RouteState(TypedDict):
+        go: str
+        visited: Annotated[list[str], operator.add]
+
+    def route_fn(state: RouteState) -> Literal["a", "b"]:
+        return state["go"]  # type: ignore[return-value]
+
+    class Router:
+        def __call__(self, state: RouteState) -> Literal["a", "b"]:
+            return state["go"]  # type: ignore[return-value]
+
+    for router in (route_fn, Router()):
+        builder = StateGraph(RouteState)
+        builder.add_node("src", lambda state: {})
+        builder.add_node("a", lambda state: {"visited": ["a"]})
+        builder.add_node("b", lambda state: {"visited": ["b"]})
+        builder.add_edge("__start__", "src")
+        builder.add_conditional_edges("src", router)
+        graph = builder.compile()
+
+        edges = {
+            (e.target, e.conditional)
+            for e in graph.get_graph().edges
+            if e.source == "src"
+        }
+        assert edges == {("a", True), ("b", True)}, type(router).__name__
+        assert graph.invoke({"go": "a", "visited": []})["visited"] == ["a"]
+        assert graph.invoke({"go": "b", "visited": []})["visited"] == ["b"]
 
 
 def test_is_field_channel() -> None:
