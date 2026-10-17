@@ -343,6 +343,55 @@ def test_remove_all_messages():
     ]
 
 
+def test_remove_all_messages_then_merges_by_id():
+    left = [HumanMessage(content="Hello", id="1")]
+    right = [
+        RemoveMessage(id=REMOVE_ALL_MESSAGES),
+        AIMessage(content="v1", id="3"),
+        AIMessage(content="v2", id="3"),
+    ]
+    assert add_messages(left, right) == [AIMessage(content="v2", id="3")]
+
+
+def test_remove_all_messages_then_removes():
+    left = [HumanMessage(content="Hello", id="1")]
+    right = [
+        RemoveMessage(id=REMOVE_ALL_MESSAGES),
+        AIMessage(content="draft", id="d"),
+        RemoveMessage(id="d"),
+    ]
+    assert add_messages(left, right) == []
+
+    # the removed history can't be removed again, same as without the marker
+    with pytest.raises(ValueError, match="doesn't exist"):
+        add_messages(
+            left, [RemoveMessage(id=REMOVE_ALL_MESSAGES), RemoveMessage(id="1")]
+        )
+
+
+@pytest.mark.skipif(
+    condition=not ((CORE_MINOR == 3 and CORE_PATCH >= 11) or CORE_MINOR > 3),
+    reason="Requires langchain_core>=0.3.11.",
+)
+def test_remove_all_messages_applies_format():
+    image = {
+        "type": "image",
+        "source_type": "base64",
+        "data": "1234",
+        "mime_type": "image/jpeg",
+    }
+    left = [HumanMessage(content="old", id="old")]
+    right = [
+        RemoveMessage(id=REMOVE_ALL_MESSAGES),
+        HumanMessage(content=[image], id="img"),
+    ]
+    result = add_messages(left, right, format="langchain-openai")
+    assert len(result) == 1
+    assert result[0].content == [
+        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,1234"}}
+    ]
+
+
 def test_push_messages_in_graph():
     class MessagesState(TypedDict):
         messages: Annotated[list[AnyMessage], add_messages]

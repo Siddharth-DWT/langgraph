@@ -213,7 +213,11 @@ def add_messages(
             remove_all_idx = idx
 
     if remove_all_idx is not None:
-        return right[remove_all_idx + 1 :]
+        # Drop the existing history and anything before the marker, then merge
+        # what follows it like any other update: by id, with removals and
+        # formatting applied.
+        left = []
+        right = right[remove_all_idx + 1 :]
 
     # merge
     merged = left.copy()
